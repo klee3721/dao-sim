@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="160" y1="100" x2="850" y2="920" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#5B9CFF"/>
+      <stop offset="0.48" stop-color="#2F6FEB"/>
+      <stop offset="1" stop-color="#1647B8"/>
+    </linearGradient>
+    <linearGradient id="card" x1="330" y1="220" x2="700" y2="800" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#EAF1FF"/>
+    </linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="170%">
+      <feDropShadow dx="0" dy="32" stdDeviation="34" flood-color="#092B75" flood-opacity="0.42"/>
+    </filter>
+  </defs>
+  <rect x="72" y="72" width="880" height="880" rx="220" fill="url(#bg)"/>
+  <path d="M165 326C230 171 406 91 565 104c140 12 278 89 343 215-173-85-332-84-475-25-103 42-185 111-268 203-30-57-31-114 0-171Z" fill="#FFFFFF" opacity="0.14"/>
+  <g filter="url(#shadow)">
+    <path d="M330 214h276l116 116v470c0 35-29 64-64 64H330c-35 0-64-29-64-64V278c0-35 29-64 64-64Z" fill="url(#card)"/>
+    <path d="M606 214v91c0 30 25 55 55 55h61" fill="#C9DBFF"/>
+    <path d="m606 214 116 116v30h-61c-30 0-55-25-55-55v-91Z" fill="#D8E6FF"/>
+  </g>
+  <rect x="350" y="440" width="288" height="242" rx="54" fill="#F1B92D"/>
+  <path d="M446 440v72c0 22-18 40-40 40h-56M542 440v72c0 22 18 40 40 40h56M350 586h72c23 0 42 19 42 42v54M638 586h-72c-23 0-42 19-42 42v54M464 552h60v74h-60Z" fill="none" stroke="#D79116" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M752 210 768 258l48 16-48 16-16 48-16-48-48-16 48-16 16-48ZM800 386l10 30 30 10-30 10-10 30-10-30-30-10 30-10 10-30Z" fill="#FFFFFF"/>
+  <circle cx="494" cy="756" r="28" fill="#2F6FEB" opacity="0.95"/>
+</svg>
