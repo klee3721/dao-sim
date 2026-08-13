@@ -56,11 +56,18 @@ describe('bulk file boundary', () => {
   })
 
   it('validates renderer-controlled format, bytes, source path, and destination extension', () => {
+    const sourcePath = join(tmpdir(), 'source.csv')
+    const csvDestination = join(tmpdir(), 'result.csv')
+    const destinationWithoutExtension = join(tmpdir(), 'result')
+    const wrongDestination = join(tmpdir(), 'result.xlsx')
+
     expect(validateBulkFormat('xlsx')).toBe('xlsx')
     expect(validateBulkOutputData(new Uint8Array([1, 2]))).toEqual(new Uint8Array([1, 2]))
-    expect(validateBulkSourcePath('/tmp/source.csv')).toBe('/tmp/source.csv')
-    expect(validateBulkDestination('/tmp/result.csv', 'csv')).toBe('/tmp/result.csv')
-    expect(validateBulkDestination('/tmp/result', 'xlsx')).toBe('/tmp/result.xlsx')
+    expect(validateBulkSourcePath(sourcePath)).toBe(sourcePath)
+    expect(validateBulkDestination(csvDestination, 'csv')).toBe(csvDestination)
+    expect(validateBulkDestination(destinationWithoutExtension, 'xlsx')).toBe(
+      `${destinationWithoutExtension}.xlsx`
+    )
 
     expect(() => validateBulkFormat('pdf')).toThrowError(expect.objectContaining({ code: 'INVALID_BULK_FORMAT' }))
     expect(() => validateBulkOutputData([1, 2])).toThrowError(
@@ -72,21 +79,25 @@ describe('bulk file boundary', () => {
     expect(() => validateBulkSourcePath('../source.csv')).toThrowError(
       expect.objectContaining({ code: 'INVALID_BULK_SOURCE' })
     )
-    expect(() => validateBulkDestination('/tmp/result.xlsx', 'csv')).toThrowError(
+    expect(() => validateBulkDestination(wrongDestination, 'csv')).toThrowError(
       expect.objectContaining({ code: 'INVALID_BULK_DESTINATION' })
     )
   })
 
   it('builds the requested default result name beside its CSV source', () => {
-    expect(createBulkDefaultPath('/Users/test/Downloads', 'xlsx', '/tmp/danh sach.csv')).toBe(
-      '/tmp/danh sach-ls.xlsx'
+    const downloadsDirectory = join(tmpdir(), 'Downloads')
+    const managedDirectory = join(tmpdir(), 'DaoSim')
+    const sourcePath = join(tmpdir(), 'danh sach.csv')
+
+    expect(createBulkDefaultPath(downloadsDirectory, 'xlsx', sourcePath)).toBe(
+      join(tmpdir(), 'danh sach-ls.xlsx')
     )
-    expect(createBulkDefaultPath('/Users/test/Downloads', 'csv')).toBe(
-      '/Users/test/Downloads/danh_sach_sim-ls.csv'
+    expect(createBulkDefaultPath(downloadsDirectory, 'csv')).toBe(
+      join(downloadsDirectory, 'danh_sach_sim-ls.csv')
     )
-    expect(
-      createBulkDefaultPath('/Users/test/DaoSim', 'xlsx', '/tmp/danh sach.csv', true)
-    ).toBe('/Users/test/DaoSim/danh sach-ls.xlsx')
+    expect(createBulkDefaultPath(managedDirectory, 'xlsx', sourcePath, true)).toBe(
+      join(managedDirectory, 'danh sach-ls.xlsx')
+    )
   })
 
   it('writes output atomically with the selected format', async () => {
