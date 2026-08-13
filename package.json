@@ -3,9 +3,17 @@
   "version": "0.7.1",
   "description": "Ứng dụng macOS và Windows duyệt web, crawl SIM và luận số tự động hoặc hàng loạt.",
   "main": "out/main/index.js",
-  "author": "Đào Sim",
-  "license": "UNLICENSED",
+  "author": "Trung Kien Vu",
+  "license": "MIT",
   "private": true,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/klee3721/dao-sim.git"
+  },
+  "bugs": {
+    "url": "https://github.com/klee3721/dao-sim/issues"
+  },
+  "homepage": "https://github.com/klee3721/dao-sim#readme",
   "scripts": {
     "dev": "electron-vite dev",
     "build": "npm run typecheck && electron-vite build",
@@ -55,7 +63,9 @@
     },
     "files": [
       "out/**/*",
-      "package.json"
+      "package.json",
+      "LICENSE",
+      "THIRD_PARTY_NOTICES.md"
     ],
     "mac": {
       "category": "public.app-category.utilities",

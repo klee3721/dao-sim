@@ -101,6 +101,12 @@ function assertAsarMetadata(archivePath) {
   if (!archiveFiles.includes('out/main/index.js')) {
     throw new Error(`app.asar không chứa out/main/index.js: ${archivePath}`)
   }
+  if (!archiveFiles.includes('LICENSE')) {
+    throw new Error(`app.asar không chứa giấy phép MIT: ${archivePath}`)
+  }
+  if (!archiveFiles.includes('THIRD_PARTY_NOTICES.md')) {
+    throw new Error(`app.asar không chứa thông báo giấy phép bên thứ ba: ${archivePath}`)
+  }
 
   const packagedMetadata = JSON.parse(asar.extractFile(archivePath, 'package.json').toString('utf8'))
   if (packagedMetadata.name !== packageJson.name) {

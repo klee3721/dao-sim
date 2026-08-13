@@ -1,5 +1,8 @@
 const { execFileSync } = require('node:child_process')
-const { join } = require('node:path')
+const { constants, copyFileSync, existsSync, lstatSync } = require('node:fs')
+const { join, resolve } = require('node:path')
+
+const projectRoot = resolve(__dirname, '..')
 
 const UNUSED_PERMISSION_KEYS = [
   'NSBluetoothAlwaysUsageDescription',
@@ -12,7 +15,9 @@ module.exports = async function afterPack(context) {
   if (context.electronPlatformName !== 'darwin') return
 
   const appName = `${context.packager.appInfo.productFilename}.app`
-  const plistPath = join(context.appOutDir, appName, 'Contents', 'Info.plist')
+  const contentsPath = join(context.appOutDir, appName, 'Contents')
+  const resourcesPath = join(contentsPath, 'Resources')
+  const plistPath = join(contentsPath, 'Info.plist')
   const helperLookupName = context.packager.appInfo.sanitizedProductName.normalize('NFD')
   const transportSecurity = JSON.stringify({
     NSAllowsArbitraryLoads: false,
@@ -44,5 +49,23 @@ module.exports = async function afterPack(context) {
     } catch {
       // Electron's default plist changes over time; a missing unused key is harmless.
     }
+  }
+
+  // The Windows Electron distribution keeps these notices beside the executable.
+  // A macOS bundle would otherwise drop the sibling files from Electron's archive,
+  // so copy them into Resources before code signing and DMG creation.
+  const electronNotices = [
+    ['LICENSE', 'LICENSE.electron.txt'],
+    ['LICENSES.chromium.html', 'LICENSES.chromium.html']
+  ]
+  for (const [sourceName, destinationName] of electronNotices) {
+    const sourcePath = join(projectRoot, 'node_modules', 'electron', 'dist', sourceName)
+    const destinationPath = join(resourcesPath, destinationName)
+    if (!existsSync(sourcePath)) throw new Error(`Thiếu thông báo giấy phép Electron: ${sourcePath}`)
+    const sourceInfo = lstatSync(sourcePath)
+    if (!sourceInfo.isFile() || sourceInfo.isSymbolicLink()) {
+      throw new Error(`Thông báo giấy phép Electron không phải file thường: ${sourcePath}`)
+    }
+    copyFileSync(sourcePath, destinationPath, constants.COPYFILE_EXCL)
   }
 }

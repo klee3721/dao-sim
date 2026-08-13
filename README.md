@@ -1,5 +1,8 @@
 # Đào Sim cho macOS và Windows
 
+[![Windows](https://github.com/klee3721/dao-sim/actions/workflows/windows.yml/badge.svg)](https://github.com/klee3721/dao-sim/actions/workflows/windows.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 Ứng dụng desktop dùng trình duyệt nhúng để tìm và crawl SIM từ bốn website:
 
 - KhoSim
@@ -21,7 +24,7 @@ Kết quả crawl được tự động nối vào file CSV đang lưu và đã 
 2. Trình cài đặt theo người dùng sẽ tự cài **Đào Sim** mà không yêu cầu quyền Administrator.
 3. Mở ứng dụng từ Start Menu hoặc shortcut trên Desktop.
 
-Bản nội bộ chưa ký mã có thể hiện cảnh báo Microsoft Defender SmartScreen với nhà phát hành không xác định. Chỉ tiếp tục khi file đến từ nguồn tin cậy và checksum SHA-256 khớp với bản phát hành. Có thể chọn **More info → Run anyway** để mở trình cài đặt.
+Bản phát hành chưa ký mã có thể hiện cảnh báo Microsoft Defender SmartScreen với nhà phát hành không xác định. Chỉ tiếp tục khi file đến từ nguồn tin cậy và checksum SHA-256 khớp với bản phát hành. Có thể chọn **More info → Run anyway** để mở trình cài đặt.
 
 ### Gỡ cài đặt trên Windows
 
@@ -135,15 +138,25 @@ Tồn kho của các website có thể thay đổi ngay trong lúc crawl. Với 
 - Không lưu mật khẩu, OTP hoặc dữ liệu đặt hàng.
 - Crawler chỉ đọc danh sách SIM và không gọi chức năng giữ số hoặc mua SIM.
 
+Vui lòng báo cáo lỗ hổng theo [chính sách bảo mật](SECURITY.md), không đăng cookie, token hoặc dữ liệu người dùng trong issue công khai.
+
+## Open source và đóng góp
+
+Mã nguồn Đào Sim được phát hành theo [MIT License](LICENSE). Hướng dẫn thiết lập, kiểm tra và gửi pull request nằm trong [CONTRIBUTING.md](CONTRIBUTING.md). Giấy phép của các dependency được liệt kê tại [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+Đào Sim là dự án độc lập, không liên kết, đại diện hoặc được bảo trợ bởi KhoSim, Sim Thăng Long, Viettel hay VNPT. Tên và nhãn hiệu của các bên thuộc chủ sở hữu tương ứng. Người dùng và người đóng góp có trách nhiệm tuân thủ điều khoản của website, pháp luật áp dụng và giới hạn truy cập hợp lý.
+
+Kết quả Huyền Số chỉ mang tính tham khảo/giải trí, không phải tư vấn y tế, tài chính, pháp lý hoặc căn cứ duy nhất cho quyết định cá nhân.
+
 ## Trạng thái phát hành
 
 ### Windows
 
-Bộ cài nội bộ chưa được ký Authenticode nên Windows có thể hiển thị cảnh báo **Unknown publisher** hoặc SmartScreen. Để phát hành rộng rãi cần ký file thực thi và bộ cài bằng chứng thư OV/EV hoặc Azure Trusted Signing, đóng dấu thời gian và kiểm tra lại chữ ký sau khi đóng gói.
+Bộ cài hiện chưa được ký Authenticode nên Windows có thể hiển thị cảnh báo **Unknown publisher** hoặc SmartScreen. Để phát hành rộng rãi cần ký file thực thi và bộ cài bằng chứng thư OV/EV hoặc Azure Trusted Signing, đóng dấu thời gian và kiểm tra lại chữ ký sau khi đóng gói.
 
 ### macOS
 
-Gói tạo trong môi trường phát triển là bản **unsigned và chưa notarized**. Đây là bản dùng để thử nghiệm hoặc chia sẻ nội bộ; cảnh báo Gatekeeper khi mở là hành vi dự kiến. Để phát hành rộng rãi cần:
+Gói tạo trong môi trường phát triển là bản **unsigned và chưa notarized**. Đây là bản dùng để thử nghiệm hoặc chia sẻ trực tiếp; cảnh báo Gatekeeper khi mở là hành vi dự kiến. Để phát hành rộng rãi cần:
 
 1. Tài khoản Apple Developer.
 2. Chứng thư Developer ID Application.
