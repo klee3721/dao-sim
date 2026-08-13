@@ -96,7 +96,9 @@ function removeStaleWindowsOutputs() {
         throw new Error(`Thư mục debug Windows có cấu trúc không mong đợi: ${entryPath}`)
       }
       const packagedMetadata = JSON.parse(asar.extractFile(asarPath, 'package.json').toString('utf8'))
-      const mainBundle = asar.extractFile(asarPath, 'out/main/index.js').toString('utf8')
+      const mainBundle = asar
+        .extractFile(asarPath, join('out', 'main', 'index.js'))
+        .toString('utf8')
       if (
         packagedMetadata.name !== packageJson.name ||
         packagedMetadata.version !== version ||

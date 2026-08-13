@@ -90,7 +90,11 @@ function assertPeContainsMetadata(filePath) {
 }
 
 function assertAsarMetadata(archivePath) {
-  const archiveFiles = asar.listPackage(archivePath).map((entry) => entry.replace(/^\//, ''))
+  // @electron/asar lists entries with the host path separator. Normalize the
+  // Windows `\\package.json` / `\\out\\main\\index.js` form before checking.
+  const archiveFiles = asar
+    .listPackage(archivePath)
+    .map((entry) => entry.replaceAll('\\', '/').replace(/^\/+/, ''))
   if (!archiveFiles.includes('package.json')) {
     throw new Error(`app.asar không chứa package.json: ${archivePath}`)
   }
@@ -106,7 +110,7 @@ function assertAsarMetadata(archivePath) {
     throw new Error(`Sai phiên bản trong app.asar: ${packagedMetadata.version}`)
   }
 
-  const mainBundle = asar.extractFile(archivePath, 'out/main/index.js').toString('utf8')
+  const mainBundle = asar.extractFile(archivePath, join('out', 'main', 'index.js')).toString('utf8')
   if (!mainBundle.includes(JSON.stringify(appId))) {
     throw new Error(`Main bundle không chứa appId ${appId}: ${archivePath}`)
   }
