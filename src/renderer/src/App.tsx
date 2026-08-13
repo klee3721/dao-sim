@@ -16,11 +16,17 @@ import type {
   Completeness,
   CrawlProgress,
   CrawlSummary,
+  FileWorkspaceState,
+  SavedFileEntry,
   SiteDefinition,
   SiteId
 } from '../../shared/types'
+import type { SelectionAnalysisModel } from '../../shared/huyen-so/selection-analysis'
+import { BulkPhoneScreen } from './BulkPhoneScreen'
+import { HuyenSoPanel } from './HuyenSoPanel'
+import { SavedFileList } from './SavedFileList'
 
-type AppTab = 'browser' | 'csv'
+type AppTab = 'browser' | 'bulk'
 type ToastTone = 'success' | 'error' | 'neutral'
 
 interface ToastState {
@@ -36,6 +42,12 @@ const EMPTY_BROWSER_STATE: BrowserState = {
   loading: false,
   canGoBack: false,
   canGoForward: false
+}
+
+const EMPTY_FILE_WORKSPACE: FileWorkspaceState = {
+  directory: '',
+  includeAnalysis: false,
+  files: []
 }
 
 const NUMBER_FORMAT = new Intl.NumberFormat('vi-VN')
@@ -92,6 +104,20 @@ function Icon({ name, size = 18 }: { name: string; size?: number }): ReactNode {
         <svg {...common}>
           <path d="M6 2.75h8l4 4V21H6z" />
           <path d="M14 2.75V7h4M8.8 12h6.4M8.8 15.5h6.4" />
+        </svg>
+      )
+    case 'folder':
+      return (
+        <svg {...common}>
+          <path d="M3.5 6.5h6l2 2h9v10.5a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z" />
+          <path d="M3.5 9h17" />
+        </svg>
+      )
+    case 'batch':
+      return (
+        <svg {...common}>
+          <rect x="4" y="3" width="16" height="18" rx="2.5" />
+          <path d="M8 8h8M8 12h3M14 12h2M8 16h3M14 16h2" />
         </svg>
       )
     case 'back':
@@ -320,8 +346,13 @@ interface CrawlPanelProps {
   isCanceling: boolean
   progress: CrawlProgress | null
   summary: CrawlSummary | null
-  saving: boolean
-  onSave: () => void
+  fileWorkspace: FileWorkspaceState
+  changingFiles: boolean
+  huyenSoResult: SelectionAnalysisModel | null
+  onChooseFolder: () => void
+  onToggleAnalysis: (enabled: boolean) => void
+  onCreateFile: () => void
+  onCloseHuyenSo: () => void
 }
 
 function CrawlPanel({
@@ -331,18 +362,24 @@ function CrawlPanel({
   isCanceling,
   progress,
   summary,
-  saving,
-  onSave
+  fileWorkspace,
+  changingFiles,
+  huyenSoResult,
+  onChooseFolder,
+  onToggleAnalysis,
+  onCreateFile,
+  onCloseHuyenSo
 }: CrawlPanelProps) {
   return (
     <aside className="inspector" aria-label="Trạng thái crawl">
-      <div className="inspector-heading">
+      <div className="inspector-crawl-content">
+        <div className="inspector-heading">
         <span className="section-icon"><Icon name="sparkles" /></span>
         <div>
           <p className="eyebrow">THU THẬP SIM</p>
           <h2>{isCrawling ? 'Đang crawl dữ liệu' : summary ? 'Đã hoàn thành' : 'Sẵn sàng'}</h2>
         </div>
-      </div>
+        </div>
 
       {activeSite ? (
         <div className="active-site-card">
@@ -359,6 +396,53 @@ function CrawlPanel({
           <p>Hãy mở một website và chọn bộ lọc trước khi bấm Crawl.</p>
         </div>
       )}
+
+      <section className="crawl-file-settings" aria-label="Cài đặt file đang lưu">
+        <div className="crawl-file-settings-heading">
+          <div>
+            <p className="eyebrow">FILE ĐANG LƯU</p>
+            <strong title={fileWorkspace.activeFile?.path}>
+              {fileWorkspace.activeFile?.name ?? 'Sẽ tự tạo khi crawl'}
+            </strong>
+          </div>
+          <button
+            className="secondary-button compact-button"
+            onClick={onCreateFile}
+            disabled={isCrawling || changingFiles}
+          >
+            <Icon name="file" size={15} />
+            Tạo file mới
+          </button>
+        </div>
+
+        <button
+          className="crawl-folder-button"
+          onClick={onChooseFolder}
+          disabled={isCrawling || changingFiles}
+          title={fileWorkspace.directory}
+        >
+          <Icon name="folder" size={15} />
+          <span>
+            <small>Thư mục lưu</small>
+            <strong>{fileWorkspace.directory ? fileNameFromPath(fileWorkspace.directory) : 'Đang tải…'}</strong>
+          </span>
+          <em>Đổi</em>
+        </button>
+
+        <label className="crawl-analysis-toggle">
+          <span>
+            <strong>Kèm luận giải</strong>
+            <small>Thêm kết quả luận số vào các cột sau cột A.</small>
+          </span>
+          <input
+            type="checkbox"
+            checked={fileWorkspace.includeAnalysis}
+            onChange={(event) => onToggleAnalysis(event.target.checked)}
+            disabled={isCrawling || changingFiles}
+          />
+          <i aria-hidden="true" />
+        </label>
+      </section>
 
       {isCrawling && progress && (
         <section className="progress-section" aria-live="polite">
@@ -420,11 +504,16 @@ function CrawlPanel({
             </div>
           )}
 
-          <button className="primary-button primary-button--full" onClick={onSave} disabled={saving || summary.count === 0}>
-            <Icon name="download" />
-            {saving ? 'Đang lưu…' : 'Lưu file CSV'}
-          </button>
-          <p className="file-hint" title={summary.suggestedFilename}>{summary.suggestedFilename}</p>
+          <div className="crawl-auto-saved">
+            <Icon name="check" size={17} />
+            <div>
+              <strong>Đã tự lưu vào {summary.savedFileName}</strong>
+              <span>
+                Thêm {NUMBER_FORMAT.format(summary.savedAddedCount)} SIM · file đang có {NUMBER_FORMAT.format(summary.savedTotalCount)} SIM
+              </span>
+              <small>{summary.includesAnalysis ? 'Có kèm luận giải' : 'CSV một cột, không luận giải'}</small>
+            </div>
+          </div>
         </section>
       )}
 
@@ -437,11 +526,14 @@ function CrawlPanel({
             <span>2</span><p>Bấm <strong>Crawl toàn bộ</strong> trên thanh công cụ.</p>
           </div>
           <div className="step-row">
-            <span>3</span><p>Lưu kết quả một cột, không có số 0 đầu.</p>
+            <span>3</span><p>Kết quả tự nối vào file đang lưu, không có số 0 đầu.</p>
           </div>
           {!canCrawl && <p className="support-note">Chỉ bốn website trong danh sách bên trái được hỗ trợ.</p>}
         </div>
       )}
+      </div>
+
+      <HuyenSoPanel result={huyenSoResult} onClose={onCloseHuyenSo} />
     </aside>
   )
 }
@@ -459,10 +551,15 @@ interface BrowserScreenProps {
   isCanceling: boolean
   progress: CrawlProgress | null
   summary: CrawlSummary | null
-  saving: boolean
+  fileWorkspace: FileWorkspaceState
+  changingFiles: boolean
+  huyenSoResult: SelectionAnalysisModel | null
   onStartCrawl: () => void
   onCancelCrawl: () => void
-  onSaveCrawl: () => void
+  onChooseFolder: () => void
+  onToggleAnalysis: (enabled: boolean) => void
+  onCreateFile: () => void
+  onCloseHuyenSo: () => void
 }
 
 function BrowserScreen({
@@ -478,10 +575,15 @@ function BrowserScreen({
   isCanceling,
   progress,
   summary,
-  saving,
+  fileWorkspace,
+  changingFiles,
+  huyenSoResult,
   onStartCrawl,
   onCancelCrawl,
-  onSaveCrawl
+  onChooseFolder,
+  onToggleAnalysis,
+  onCreateFile,
+  onCloseHuyenSo
 }: BrowserScreenProps) {
   const activeSite = sites.find((site) => site.id === browserState.siteId)
   const browserVisible = Boolean(browserState.url)
@@ -545,6 +647,16 @@ function BrowserScreen({
           {browserState.loading && <span className="address-spinner" aria-label="Đang tải" />}
         </form>
 
+        <div
+          className="huyen-so-auto-badge"
+          title="Bôi đen một dãy số trên website để tự động xem luận giải"
+          aria-label="Huyền Số đang ở chế độ tự động"
+        >
+          <Icon name="sparkles" size={14} />
+          <span>Huyền Số</span>
+          <strong>AUTO</strong>
+        </div>
+
         {isCrawling ? (
           <button className="danger-button toolbar-action" onClick={onCancelCrawl} disabled={isCanceling}>
             <Icon name="stop" />
@@ -594,8 +706,13 @@ function BrowserScreen({
           isCanceling={isCanceling}
           progress={progress}
           summary={summary}
-          saving={saving}
-          onSave={onSaveCrawl}
+          fileWorkspace={fileWorkspace}
+          changingFiles={changingFiles}
+          huyenSoResult={huyenSoResult}
+          onChooseFolder={onChooseFolder}
+          onToggleAnalysis={onToggleAnalysis}
+          onCreateFile={onCreateFile}
+          onCloseHuyenSo={onCloseHuyenSo}
         />
       </div>
     </section>
@@ -611,7 +728,10 @@ interface CsvScreenProps {
   setTokensInput: (value: string) => void
   opening: boolean
   saving: boolean
+  savedDirectory: string
+  savedFiles: SavedFileEntry[]
   onOpen: () => void
+  onOpenSaved: (path: string) => void
   onApply: () => void
   onReset: () => void
   onSave: () => void
@@ -626,7 +746,10 @@ function CsvScreen({
   setTokensInput,
   opening,
   saving,
+  savedDirectory,
+  savedFiles,
   onOpen,
+  onOpenSaved,
   onApply,
   onReset,
   onSave
@@ -676,6 +799,14 @@ function CsvScreen({
           </button>
         </div>
       </div>
+
+      <SavedFileList
+        directory={savedDirectory}
+        files={savedFiles}
+        activePath={sourcePath}
+        busy={opening || saving}
+        onOpen={onOpenSaved}
+      />
 
       {!hasFile ? (
         <button className="csv-empty-state" onClick={onOpen} disabled={opening}>
@@ -822,6 +953,7 @@ function CsvScreen({
 function App() {
   const api = window.simApp
   const sites = api.sites
+  const platformLabel = api.platform === 'win32' ? 'Windows' : api.platform === 'darwin' ? 'macOS' : 'Linux'
   const [activeTab, setActiveTab] = useState<AppTab>('browser')
   const [browserState, setBrowserState] = useState<BrowserState>(EMPTY_BROWSER_STATE)
   const [address, setAddress] = useState('')
@@ -830,16 +962,11 @@ function App() {
   const [isCanceling, setIsCanceling] = useState(false)
   const [progress, setProgress] = useState<CrawlProgress | null>(null)
   const [summary, setSummary] = useState<CrawlSummary | null>(null)
-  const [savingCrawl, setSavingCrawl] = useState(false)
+  const [fileWorkspace, setFileWorkspace] = useState<FileWorkspaceState>(EMPTY_FILE_WORKSPACE)
+  const [changingFiles, setChangingFiles] = useState(false)
+  const [huyenSoResult, setHuyenSoResult] = useState<SelectionAnalysisModel | null>(null)
   const [toast, setToast] = useState<ToastState | null>(null)
 
-  const [csvPath, setCsvPath] = useState<string>()
-  const [csvInvalidCount, setCsvInvalidCount] = useState(0)
-  const [csvOriginalValues, setCsvOriginalValues] = useState<string[]>([])
-  const [csvWorkingValues, setCsvWorkingValues] = useState<string[]>([])
-  const [csvTokensInput, setCsvTokensInput] = useState('')
-  const [openingCsv, setOpeningCsv] = useState(false)
-  const [savingCsv, setSavingCsv] = useState(false)
   const cancelRequestedRef = useRef(false)
   const toastSequenceRef = useRef(0)
 
@@ -847,6 +974,12 @@ function App() {
     toastSequenceRef.current += 1
     setToast({ message, tone, sequence: toastSequenceRef.current })
   }, [])
+
+  const refreshFileWorkspace = useCallback(async () => {
+    const state = await api.getFileWorkspace()
+    setFileWorkspace(state)
+    return state
+  }, [api])
 
   useEffect(() => {
     if (!toast) return
@@ -856,6 +989,7 @@ function App() {
 
   useEffect(() => {
     const removeBrowserListener = api.onBrowserState((state) => setBrowserState(state))
+    const removeHuyenSoListener = api.onHuyenSoResult((result) => setHuyenSoResult(result))
     const removeProgressListener = api.onCrawlProgress((nextProgress) => {
       setProgress(nextProgress)
       setIsCrawling(true)
@@ -863,10 +997,15 @@ function App() {
     const removeErrorListener = api.onAppError((error: AppErrorPayload) => showToast(error.message, 'error'))
     return () => {
       removeBrowserListener()
+      removeHuyenSoListener()
       removeProgressListener()
       removeErrorListener()
     }
   }, [api, showToast])
+
+  useEffect(() => {
+    void refreshFileWorkspace().catch((error) => showToast(errorMessage(error), 'error'))
+  }, [activeTab, refreshFileWorkspace, showToast])
 
   useEffect(() => {
     if (!addressFocused) setAddress(browserState.url)
@@ -917,7 +1056,11 @@ function App() {
     try {
       const result = await api.startCrawl()
       setSummary(result)
-      showToast(`Đã thu thập ${NUMBER_FORMAT.format(result.count)} SIM.`, 'success')
+      await refreshFileWorkspace()
+      showToast(
+        `Đã thêm ${NUMBER_FORMAT.format(result.savedAddedCount)} SIM vào ${result.savedFileName}.`,
+        'success'
+      )
     } catch (error) {
       if (!cancelRequestedRef.current) showToast(errorMessage(error), 'error')
       else showToast('Đã dừng crawl. Không có file nào được tạo.', 'neutral')
@@ -927,7 +1070,7 @@ function App() {
       setProgress(null)
       cancelRequestedRef.current = false
     }
-  }, [api, browserState.siteId, browserState.url, isCrawling, showToast])
+  }, [api, browserState.siteId, browserState.url, isCrawling, refreshFileWorkspace, showToast])
 
   const cancelCrawl = useCallback(async () => {
     if (!isCrawling || isCanceling) return
@@ -941,89 +1084,66 @@ function App() {
     }
   }, [api, isCanceling, isCrawling, showToast])
 
-  const saveLastCrawl = useCallback(async () => {
-    if (!summary || savingCrawl) return
-    setSavingCrawl(true)
+  const chooseSaveFolder = useCallback(async () => {
+    if (changingFiles || isCrawling) return
+    setChangingFiles(true)
     try {
-      const result = await api.saveLastCrawl()
-      if (!result.canceled && result.path) showToast(`Đã lưu ${fileNameFromPath(result.path)}.`, 'success')
+      const state = await api.chooseSaveFolder()
+      setFileWorkspace(state)
+      setSummary(null)
+      showToast(`Đang lưu file tại ${fileNameFromPath(state.directory)}.`, 'success')
     } catch (error) {
       showToast(errorMessage(error), 'error')
     } finally {
-      setSavingCrawl(false)
+      setChangingFiles(false)
     }
-  }, [api, savingCrawl, showToast, summary])
+  }, [api, changingFiles, isCrawling, showToast])
 
-  const openCsv = useCallback(async () => {
-    if (openingCsv || savingCsv) return
-    setOpeningCsv(true)
+  const toggleCrawlAnalysis = useCallback(async (enabled: boolean) => {
+    if (changingFiles || isCrawling) return
+    setChangingFiles(true)
     try {
-      const result = await api.openCsv()
-      if (!result.canceled && result.path && result.values) {
-        setCsvPath(result.path)
-        setCsvOriginalValues([...result.values])
-        setCsvWorkingValues([...result.values])
-        setCsvInvalidCount(result.invalidCount ?? 0)
-        setCsvTokensInput('')
-        showToast(`Đã mở ${fileNameFromPath(result.path)}.`, 'success')
-      }
+      const state = await api.setCrawlAnalysis(enabled)
+      setFileWorkspace(state)
+      showToast(
+        enabled
+          ? 'Lượt lưu tiếp theo sẽ thêm các cột luận giải.'
+          : 'Lượt lưu tiếp theo sẽ trở về CSV một cột.',
+        'neutral'
+      )
     } catch (error) {
       showToast(errorMessage(error), 'error')
     } finally {
-      setOpeningCsv(false)
+      setChangingFiles(false)
     }
-  }, [api, openingCsv, savingCsv, showToast])
+  }, [api, changingFiles, isCrawling, showToast])
 
-  const csvTokens = useMemo(
-    () => [...new Set(csvTokensInput.split(/[,\n]+/).map((token) => token.trim()).filter((token) => /^\d+$/.test(token)))],
-    [csvTokensInput]
-  )
-  const csvHasInvalidTokens = useMemo(
-    () => csvTokensInput.split(/[,\n]+/).map((token) => token.trim()).filter(Boolean).some((token) => !/^\d+$/.test(token)),
-    [csvTokensInput]
-  )
-
-  const applyCsvFilter = useCallback(() => {
-    if (csvHasInvalidTokens || csvTokens.length === 0) return
-    const filtered = csvWorkingValues.filter((value) => !csvTokens.some((token) => value.includes(token)))
-    const removedCount = csvWorkingValues.length - filtered.length
-    setCsvWorkingValues(filtered)
-    setCsvTokensInput('')
-    showToast(`Đã loại ${NUMBER_FORMAT.format(removedCount)} dòng.`, removedCount > 0 ? 'success' : 'neutral')
-  }, [csvHasInvalidTokens, csvTokens, csvWorkingValues, showToast])
-
-  const resetCsv = useCallback(() => {
-    setCsvWorkingValues([...csvOriginalValues])
-    setCsvTokensInput('')
-    showToast('Đã khôi phục dữ liệu từ file gốc.', 'neutral')
-  }, [csvOriginalValues, showToast])
-
-  const saveCsv = useCallback(async () => {
-    if (!csvPath || savingCsv) return
-    setSavingCsv(true)
+  const createCrawlFile = useCallback(async () => {
+    if (changingFiles || isCrawling) return
+    setChangingFiles(true)
     try {
-      const result = await api.saveCsv(csvWorkingValues, csvPath)
-      if (!result.canceled && result.path) {
-        showToast(`Đã lưu ${NUMBER_FORMAT.format(result.count ?? csvWorkingValues.length)} dòng vào ${fileNameFromPath(result.path)}.`, 'success')
-      }
+      const state = await api.createCrawlFile()
+      setFileWorkspace(state)
+      setSummary(null)
+      showToast(`Đã chuyển sang ${state.activeFile?.name ?? 'file mới'}.`, 'success')
     } catch (error) {
       showToast(errorMessage(error), 'error')
     } finally {
-      setSavingCsv(false)
+      setChangingFiles(false)
     }
-  }, [api, csvPath, csvWorkingValues, savingCsv, showToast])
+  }, [api, changingFiles, isCrawling, showToast])
 
   const activeSite = sites.find((site) => site.id === browserState.siteId)
 
   return (
-    <div className="app-shell">
+    <div className={cx('app-shell', `app-shell--${api.platform}`)}>
       <aside className="sidebar">
         <div className="sidebar-drag-area" />
         <div className="brand">
           <span className="brand-icon"><Icon name="phone" size={21} /></span>
           <div className="brand-copy">
             <strong>Đào Sim</strong>
-            <span>macOS</span>
+            <span>{platformLabel}</span>
           </div>
         </div>
 
@@ -1037,12 +1157,12 @@ function App() {
             <span>Trình duyệt</span>
           </button>
           <button
-            className={cx('navigation-item', activeTab === 'csv' && 'navigation-item--active')}
-            onClick={() => setActiveTab('csv')}
-            aria-current={activeTab === 'csv' ? 'page' : undefined}
+            className={cx('navigation-item', activeTab === 'bulk' && 'navigation-item--active')}
+            onClick={() => setActiveTab('bulk')}
+            aria-current={activeTab === 'bulk' ? 'page' : undefined}
           >
-            <Icon name="file" />
-            <span>Xử lý CSV</span>
+            <Icon name="batch" />
+            <span>Luận hàng loạt</span>
           </button>
         </nav>
 
@@ -1073,7 +1193,9 @@ function App() {
       <main className="main-content">
         <header className="app-topbar">
           <div>
-            <span className="topbar-title">{activeTab === 'browser' ? 'Trình duyệt SIM' : 'Xử lý file CSV'}</span>
+            <span className="topbar-title">
+              {activeTab === 'browser' ? 'Trình duyệt SIM' : 'Luận SĐT hàng loạt'}
+            </span>
             {activeTab === 'browser' && activeSite && <span className="topbar-context">/ {activeSite.name}</span>}
           </div>
           <div className="topbar-status">
@@ -1096,27 +1218,25 @@ function App() {
             isCanceling={isCanceling}
             progress={progress}
             summary={summary}
-            saving={savingCrawl}
+            fileWorkspace={fileWorkspace}
+            changingFiles={changingFiles}
+            huyenSoResult={huyenSoResult}
             onStartCrawl={startCrawl}
             onCancelCrawl={cancelCrawl}
-            onSaveCrawl={saveLastCrawl}
+            onChooseFolder={() => void chooseSaveFolder()}
+            onToggleAnalysis={(enabled) => void toggleCrawlAnalysis(enabled)}
+            onCreateFile={() => void createCrawlFile()}
+            onCloseHuyenSo={() => setHuyenSoResult(null)}
           />
-        ) : (
-          <CsvScreen
-            sourcePath={csvPath}
-            invalidCount={csvInvalidCount}
-            originalValues={csvOriginalValues}
-            workingValues={csvWorkingValues}
-            tokensInput={csvTokensInput}
-            setTokensInput={setCsvTokensInput}
-            opening={openingCsv}
-            saving={savingCsv}
-            onOpen={() => void openCsv()}
-            onApply={applyCsvFilter}
-            onReset={resetCsv}
-            onSave={() => void saveCsv()}
-          />
-        )}
+        ) : null}
+
+        <BulkPhoneScreen
+          visible={activeTab === 'bulk'}
+          savedDirectory={fileWorkspace.directory}
+          savedFiles={fileWorkspace.files}
+          onFilesChanged={() => void refreshFileWorkspace()}
+          onNotify={showToast}
+        />
       </main>
 
       <div className="toast-region" aria-live="polite" aria-atomic="true">

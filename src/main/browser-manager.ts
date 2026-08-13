@@ -1,8 +1,10 @@
 import { BrowserWindow, WebContentsView, session, type Session } from 'electron'
+import { join } from 'node:path'
 import { AppError } from './errors'
 import type { CapturedRequest } from './crawl/types'
 import { captureWebRequestPatterns, isAllowedCapturedRequest } from './crawl/url-policy'
 import type { BrowserAction, BrowserBounds, BrowserState, SiteId } from '../shared/types'
+import type { SelectionAnalysisModel } from '../shared/huyen-so/selection-analysis'
 import { isAllowedMainFrameUrl, siteById, siteIdFromUrl } from '../shared/sites'
 
 function uploadBody(uploadData: Electron.UploadData[] | undefined): string | undefined {
@@ -40,6 +42,28 @@ function isDestroyedObjectError(error: unknown): boolean {
 
 function rethrowUnlessDestroyed(error: unknown): void {
   if (!isDestroyedObjectError(error)) throw error
+}
+
+function isSelectionAnalysisModel(value: unknown): value is SelectionAnalysisModel {
+  if (!value || typeof value !== 'object') return false
+  const model = value as Record<string, unknown>
+  if (model.kind !== 'success' && model.kind !== 'error') return false
+  if (typeof model.originalInput !== 'string' || model.originalInput.length > 500) return false
+  if (model.kind === 'error') return typeof model.error === 'string' && model.error.length <= 2_000
+  if (
+    typeof model.normalizedInput !== 'string' ||
+    typeof model.selectionLabel !== 'string' ||
+    typeof model.summary !== 'string' ||
+    !Array.isArray(model.pairs) ||
+    !Array.isArray(model.energies)
+  ) {
+    return false
+  }
+  try {
+    return JSON.stringify(value).length <= 512_000
+  } catch {
+    return false
+  }
 }
 
 export interface CrawlTarget {
@@ -93,6 +117,7 @@ export class BrowserManager {
     const view = new WebContentsView({
       webPreferences: {
         partition,
+        preload: join(__dirname, '../preload/browser-extension.js'),
         nodeIntegration: false,
         contextIsolation: true,
         sandbox: true,
@@ -318,6 +343,11 @@ export class BrowserManager {
     }
     webContents.on('will-navigate', guardNavigation)
     webContents.on('will-redirect', guardNavigation)
+    webContents.on('ipc-message', (_event, channel, ...args) => {
+      if (channel !== 'huyen-so:selection-result' || !this.isCurrentView(view)) return
+      const result = args[0]
+      if (isSelectionAnalysisModel(result)) this.emitHuyenSoResult(result)
+    })
     webContents.on('did-start-loading', () => {
       if (this.isCurrentView(view)) this.emitState()
     })
@@ -327,6 +357,7 @@ export class BrowserManager {
     webContents.on('did-navigate', (_event, url) => {
       if (!this.isCurrentView(view)) return
       this.lastUrls.set(siteId, url)
+      this.emitHuyenSoResult(null)
       this.emitState()
     })
     webContents.on('did-navigate-in-page', (_event, url) => {
@@ -368,6 +399,15 @@ export class BrowserManager {
     if (this.isUnavailable()) return
     try {
       this.window.webContents.send('app:error', { code, message })
+    } catch (error) {
+      if (!this.isUnavailable() && !isDestroyedObjectError(error)) throw error
+    }
+  }
+
+  private emitHuyenSoResult(result: SelectionAnalysisModel | null): void {
+    if (this.isUnavailable()) return
+    try {
+      this.window.webContents.send('huyen-so:result', result)
     } catch (error) {
       if (!this.isUnavailable() && !isDestroyedObjectError(error)) throw error
     }

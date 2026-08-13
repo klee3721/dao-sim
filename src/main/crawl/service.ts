@@ -1,8 +1,7 @@
-import { app, dialog, type BrowserWindow } from 'electron'
-import { join } from 'node:path'
+import type { BrowserWindow } from 'electron'
 import type { BrowserManager } from '../browser-manager'
-import { writeSimCsvAtomic } from '../csv'
 import { AppError, toAppError } from '../errors'
+import type { SavedFilesService } from '../saved-files'
 import { normalizeAndDedupe } from './normalize'
 import type { AdapterResult, CrawlContext, SiteAdapter } from './types'
 import { fetchWithAllowedRedirects } from './url-policy'
@@ -19,11 +18,6 @@ const COMPLETENESS_LABELS: Record<Completeness, string> = {
   returned_set_complete: 'Đủ tập website cung cấp',
   best_effort: 'Tốt nhất có thể',
   partial: 'Không hoàn tất'
-}
-
-interface StoredResult {
-  summary: CrawlSummary
-  values: string[]
 }
 
 function abortableDelay(ms: number, signal: AbortSignal): Promise<void> {
@@ -44,24 +38,16 @@ function abortableDelay(ms: number, signal: AbortSignal): Promise<void> {
   })
 }
 
-function safeFilenameSegment(value: string): string {
-  return value
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-zA-Z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '')
-    .slice(0, 36)
-}
-
 export class CrawlService {
   private readonly window: BrowserWindow
   private readonly browser: BrowserManager
+  private readonly savedFiles: SavedFilesService
   private controller: AbortController | null = null
-  private lastResult: StoredResult | null = null
 
-  constructor(window: BrowserWindow, browser: BrowserManager) {
+  constructor(window: BrowserWindow, browser: BrowserManager, savedFiles: SavedFilesService) {
     this.window = window
     this.browser = browser
+    this.savedFiles = savedFiles
   }
 
   async start(): Promise<CrawlSummary> {
@@ -74,7 +60,6 @@ export class CrawlService {
     }
 
     this.controller = new AbortController()
-    this.lastResult = null
     const signal = this.controller.signal
     let collected = 0
     let unique = 0
@@ -171,15 +156,7 @@ export class CrawlService {
       }
 
       const now = new Date()
-      const stamp = [
-        now.getFullYear(),
-        String(now.getMonth() + 1).padStart(2, '0'),
-        String(now.getDate()).padStart(2, '0'),
-        '_',
-        String(now.getHours()).padStart(2, '0'),
-        String(now.getMinutes()).padStart(2, '0')
-      ].join('')
-      const pathHint = safeFilenameSegment(decodeURIComponent(sourceUrl.pathname)) || 'ket_qua'
+      const saved = await this.savedFiles.appendCrawl(normalized.values)
       const summary: CrawlSummary = {
         siteId: target.siteId,
         sourceUrl: target.url,
@@ -189,10 +166,14 @@ export class CrawlService {
         completeness: adapterResult.completeness,
         completenessLabel: COMPLETENESS_LABELS[adapterResult.completeness],
         warning: adapterResult.warning,
-        suggestedFilename: `sim_${target.siteId}_${pathHint}_${stamp}.csv`,
-        finishedAt: now.toISOString()
+        suggestedFilename: saved.name,
+        finishedAt: now.toISOString(),
+        savedFilePath: saved.path,
+        savedFileName: saved.name,
+        savedAddedCount: saved.addedCount,
+        savedTotalCount: saved.totalCount,
+        includesAnalysis: saved.includesAnalysis
       }
-      this.lastResult = { summary, values: normalized.values }
       return summary
     } catch (error) {
       if (signal.aborted) throw new AppError('CANCELLED', 'Đã dừng job crawl.')
@@ -206,15 +187,7 @@ export class CrawlService {
     this.controller?.abort(new DOMException('Đã hủy', 'AbortError'))
   }
 
-  async saveLastResult(): Promise<{ canceled: boolean; path?: string; count?: number }> {
-    if (!this.lastResult) throw new AppError('NO_RESULT', 'Chưa có kết quả crawl để lưu.')
-    const selected = await dialog.showSaveDialog(this.window, {
-      title: 'Lưu danh sách SIM',
-      defaultPath: join(app.getPath('downloads'), this.lastResult.summary.suggestedFilename),
-      filters: [{ name: 'CSV', extensions: ['csv'] }]
-    })
-    if (selected.canceled || !selected.filePath) return { canceled: true }
-    await writeSimCsvAtomic(selected.filePath, this.lastResult.values)
-    return { canceled: false, path: selected.filePath, count: this.lastResult.values.length }
+  isRunning(): boolean {
+    return this.controller !== null
   }
 }

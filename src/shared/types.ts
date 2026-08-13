@@ -1,3 +1,7 @@
+import type { SelectionAnalysisModel } from './huyen-so/selection-analysis'
+
+export type AppPlatform = 'darwin' | 'win32' | 'linux'
+
 export type SiteId = 'khosim' | 'simthanglong' | 'viettel' | 'vnpt'
 
 export type Completeness =
@@ -53,19 +57,43 @@ export interface CrawlSummary {
   warning?: string
   suggestedFilename: string
   finishedAt: string
+  savedFilePath: string
+  savedFileName: string
+  savedAddedCount: number
+  savedTotalCount: number
+  includesAnalysis: boolean
 }
 
-export interface CsvOpenResult {
-  canceled: boolean
-  path?: string
-  values?: string[]
-  invalidCount?: number
+export type SavedFileFormat = 'csv' | 'xlsx'
+
+export interface SavedFileEntry {
+  path: string
+  name: string
+  format: SavedFileFormat
+  size: number
+  modifiedAt: string
+  isActive: boolean
+  includesAnalysis?: boolean
 }
 
-export interface CsvSaveResult {
+export interface FileWorkspaceState {
+  directory: string
+  includeAnalysis: boolean
+  activeFile?: SavedFileEntry
+  files: SavedFileEntry[]
+}
+
+export type BulkFileFormat = 'csv' | 'xlsx'
+
+export interface BulkCsvOpenResult {
   canceled: boolean
   path?: string
-  count?: number
+  text?: string
+}
+
+export interface BulkFileSaveResult {
+  canceled: boolean
+  path?: string
 }
 
 export interface AppErrorPayload {
@@ -74,6 +102,7 @@ export interface AppErrorPayload {
 }
 
 export interface SimAppApi {
+  platform: AppPlatform
   sites: SiteDefinition[]
   openSite(siteId: SiteId): Promise<void>
   navigate(url: string): Promise<void>
@@ -82,11 +111,20 @@ export interface SimAppApi {
   setBrowserVisible(visible: boolean): void
   startCrawl(): Promise<CrawlSummary>
   cancelCrawl(): Promise<void>
-  saveLastCrawl(): Promise<CsvSaveResult>
-  openCsv(): Promise<CsvOpenResult>
-  saveCsv(values: string[], sourcePath?: string): Promise<CsvSaveResult>
+  getFileWorkspace(): Promise<FileWorkspaceState>
+  chooseSaveFolder(): Promise<FileWorkspaceState>
+  setCrawlAnalysis(enabled: boolean): Promise<FileWorkspaceState>
+  createCrawlFile(): Promise<FileWorkspaceState>
+  openBulkCsv(): Promise<BulkCsvOpenResult>
+  openSavedBulkCsv(path: string): Promise<BulkCsvOpenResult>
+  saveBulkFile(
+    data: Uint8Array,
+    format: BulkFileFormat,
+    sourcePath?: string
+  ): Promise<BulkFileSaveResult>
   clearSiteData(siteId: SiteId): Promise<void>
   onBrowserState(callback: (state: BrowserState) => void): () => void
+  onHuyenSoResult(callback: (result: SelectionAnalysisModel | null) => void): () => void
   onCrawlProgress(callback: (progress: CrawlProgress) => void): () => void
   onAppError(callback: (error: AppErrorPayload) => void): () => void
 }

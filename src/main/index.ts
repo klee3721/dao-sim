@@ -1,16 +1,30 @@
 import { app, BrowserWindow, dialog, ipcMain } from 'electron'
-import { join, basename, dirname, extname, resolve } from 'node:path'
+import { join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { BrowserManager } from './browser-manager'
 import { CrawlService } from './crawl/service'
-import { readSimCsv, writeSimCsvAtomic } from './csv'
+import { SavedFilesService } from './saved-files'
 import { toAppError } from './errors'
+import {
+  createBulkDefaultPath,
+  readBulkCsvText,
+  validateBulkDestination,
+  validateBulkFormat,
+  validateBulkOutputData,
+  validateBulkSourcePath,
+  writeBulkFileAtomic
+} from './bulk-files'
 import type { BrowserAction, BrowserBounds, SiteId } from '../shared/types'
+
+const APP_ID = 'vn.daosim.desktop'
 
 let mainWindow: BrowserWindow | null = null
 let browserManager: BrowserManager | null = null
 let crawlService: CrawlService | null = null
+let savedFilesService: SavedFilesService | null = null
 let trustedRendererUrl: URL | null = null
+
+if (process.platform === 'win32') app.setAppUserModelId(APP_ID)
 
 function isLoopbackHostname(hostname: string): boolean {
   return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]'
@@ -109,11 +123,55 @@ function registerIpc(): void {
     assertTrustedSender(event.sender)
     crawlService?.cancel()
   })
-  ipcMain.handle('crawl:save', async (event) => {
+  ipcMain.handle('files:get-workspace', async (event) => {
     try {
       assertTrustedSender(event.sender)
-      if (!crawlService) throw new Error('Crawler chưa sẵn sàng.')
-      return await crawlService.saveLastResult()
+      if (!savedFilesService) throw new Error('Kho file chưa sẵn sàng.')
+      return await savedFilesService.getState()
+    } catch (error) {
+      emitError(error)
+    }
+  })
+  ipcMain.handle('files:choose-folder', async (event) => {
+    try {
+      assertTrustedSender(event.sender)
+      if (!mainWindow || !savedFilesService) throw new Error('Kho file chưa sẵn sàng.')
+      if (crawlService?.isRunning()) {
+        throw new Error('Hãy chờ crawl hoàn tất trước khi đổi thư mục lưu.')
+      }
+      const selected = await dialog.showOpenDialog(mainWindow, {
+        title: 'Chọn thư mục lưu file Đào Sim',
+        defaultPath: await savedFilesService.getDirectory(),
+        properties: ['openDirectory', 'createDirectory']
+      })
+      if (selected.canceled || selected.filePaths.length === 0) {
+        return await savedFilesService.getState()
+      }
+      return await savedFilesService.setDirectory(selected.filePaths[0])
+    } catch (error) {
+      emitError(error)
+    }
+  })
+  ipcMain.handle('files:set-analysis', async (event, enabled: unknown) => {
+    try {
+      assertTrustedSender(event.sender)
+      if (!savedFilesService) throw new Error('Kho file chưa sẵn sàng.')
+      if (crawlService?.isRunning()) {
+        throw new Error('Không thể đổi chế độ luận giải khi đang crawl.')
+      }
+      return await savedFilesService.setIncludeAnalysis(enabled)
+    } catch (error) {
+      emitError(error)
+    }
+  })
+  ipcMain.handle('files:create', async (event) => {
+    try {
+      assertTrustedSender(event.sender)
+      if (!savedFilesService) throw new Error('Kho file chưa sẵn sàng.')
+      if (crawlService?.isRunning()) {
+        throw new Error('Hãy chờ crawl hoàn tất trước khi tạo file mới.')
+      }
+      return await savedFilesService.createNewFile()
     } catch (error) {
       emitError(error)
     }
@@ -126,46 +184,76 @@ function registerIpc(): void {
       emitError(error)
     }
   })
-  ipcMain.handle('csv:open', async (event) => {
+  ipcMain.handle('bulk:open-csv', async (event) => {
     try {
       assertTrustedSender(event.sender)
       if (!mainWindow) throw new Error('Cửa sổ chưa sẵn sàng.')
       const selected = await dialog.showOpenDialog(mainWindow, {
-        title: 'Mở danh sách SIM',
+        title: 'Mở file CSV để luận số',
+        defaultPath: await savedFilesService?.getDirectory(),
         properties: ['openFile'],
         filters: [{ name: 'CSV', extensions: ['csv'] }]
       })
       if (selected.canceled || selected.filePaths.length === 0) return { canceled: true }
       const filePath = selected.filePaths[0]
-      const result = await readSimCsv(filePath)
-      return { canceled: false, path: filePath, ...result }
+      const text = await readBulkCsvText(filePath)
+      return { canceled: false, path: filePath, text }
     } catch (error) {
       emitError(error)
     }
   })
-  ipcMain.handle('csv:save', async (event, values: string[], sourcePath?: string) => {
+  ipcMain.handle('bulk:open-saved-csv', async (event, filePath: unknown) => {
     try {
       assertTrustedSender(event.sender)
-      if (!mainWindow) throw new Error('Cửa sổ chưa sẵn sàng.')
-      const sourceDirectory = sourcePath ? dirname(sourcePath) : app.getPath('downloads')
-      const sourceName = sourcePath ? basename(sourcePath, extname(sourcePath)) : 'danh_sach_sim'
-      const selected = await dialog.showSaveDialog(mainWindow, {
-        title: 'Lưu danh sách đã lọc',
-        defaultPath: join(sourceDirectory, `${sourceName}_filtered.csv`),
-        filters: [{ name: 'CSV', extensions: ['csv'] }]
-      })
-      if (selected.canceled || !selected.filePath) return { canceled: true }
-      await writeSimCsvAtomic(selected.filePath, values)
-      return { canceled: false, path: selected.filePath, count: values.length }
+      if (!savedFilesService) throw new Error('Kho file chưa sẵn sàng.')
+      const result = await savedFilesService.readSavedCsv(filePath)
+      return {
+        canceled: false,
+        path: result.path,
+        text: result.values.length ? `${result.values.join('\r\n')}\r\n` : ''
+      }
     } catch (error) {
       emitError(error)
     }
   })
+  ipcMain.handle(
+    'bulk:save-file',
+    async (event, dataValue: unknown, formatValue: unknown, sourcePathValue?: unknown) => {
+      try {
+        assertTrustedSender(event.sender)
+        if (!mainWindow) throw new Error('Cửa sổ chưa sẵn sàng.')
+        const data = validateBulkOutputData(dataValue)
+        const format = validateBulkFormat(formatValue)
+        const sourcePath = validateBulkSourcePath(sourcePathValue)
+        const selected = await dialog.showSaveDialog(mainWindow, {
+          title: format === 'csv' ? 'Lưu kết quả luận số CSV' : 'Lưu kết quả luận số Excel',
+          defaultPath: createBulkDefaultPath(
+            savedFilesService ? await savedFilesService.getDirectory() : app.getPath('downloads'),
+            format,
+            sourcePath,
+            Boolean(savedFilesService)
+          ),
+          filters: [
+            format === 'csv'
+              ? { name: 'CSV', extensions: ['csv'] }
+              : { name: 'Excel', extensions: ['xlsx'] }
+          ]
+        })
+        if (selected.canceled || !selected.filePath) return { canceled: true }
+        const filePath = validateBulkDestination(selected.filePath, format)
+        await writeBulkFileAtomic(filePath, data, format)
+        return { canceled: false, path: filePath }
+      } catch (error) {
+        emitError(error)
+      }
+    }
+  )
 }
 
 async function createWindow(): Promise<void> {
   const rendererFile = join(__dirname, '../renderer/index.html')
   const localDevRendererUrl = devRendererUrl()
+  const isMac = process.platform === 'darwin'
   trustedRendererUrl = localDevRendererUrl ?? new URL(pathToFileURL(rendererFile).toString())
 
   const windowInstance = new BrowserWindow({
@@ -175,8 +263,13 @@ async function createWindow(): Promise<void> {
     minHeight: 700,
     show: false,
     title: 'Đào Sim',
-    titleBarStyle: 'hiddenInset',
-    trafficLightPosition: { x: 18, y: 18 },
+    autoHideMenuBar: process.platform === 'win32',
+    ...(isMac
+      ? {
+          titleBarStyle: 'hiddenInset' as const,
+          trafficLightPosition: { x: 18, y: 18 }
+        }
+      : {}),
     backgroundColor: '#f4f5f7',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
@@ -199,7 +292,11 @@ async function createWindow(): Promise<void> {
     (_webContents, _permission, callback) => callback(false)
   )
   const manager = new BrowserManager(windowInstance)
-  const service = new CrawlService(windowInstance, manager)
+  savedFilesService ??= new SavedFilesService(
+    join(app.getPath('userData'), 'file-workspace.json'),
+    join(app.getPath('downloads'), 'DaoSim')
+  )
+  const service = new CrawlService(windowInstance, manager, savedFilesService)
   browserManager = manager
   crawlService = service
 
