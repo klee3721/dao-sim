@@ -16,7 +16,7 @@
     "package:mac": "npm run build && electron-builder --mac dmg zip --arm64 && node scripts/install-mac-release.cjs arm64",
     "package:mac:dir": "npm run build && electron-builder --mac dir --arm64",
     "package:mac:universal": "npm run build && electron-builder --mac dmg zip --universal && node scripts/install-mac-release.cjs universal",
-    "package:win": "npm run build && electron-builder --win nsis zip --x64 && node scripts/finalize-win-release.cjs x64",
+    "package:win": "npm run build && electron-builder --win nsis zip --x64 --publish never && node scripts/finalize-win-release.cjs x64",
     "package:win:dir": "npm run build && electron-builder --win dir --x64",
     "package:win:verify": "node scripts/verify-win-release.cjs x64"
   },
