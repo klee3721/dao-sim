@@ -77,6 +77,47 @@ describe('khoSimAdapter', () => {
     expect(requestedUrls[2].pathname).toBe('/sim-duoi-123')
   })
 
+  it('verifies every row but excludes 11-digit landlines from the SIM output', async () => {
+    const mobiles = [simNumber(1), simNumber(2)]
+    const landline = '02696888888'
+    const fetchText = vi.fn(async () => html(3, [mobiles[0], landline, mobiles[1]]))
+    const context = mockContext('khosim', 'https://khosim.com/sim-luc-quy', fetchText)
+
+    const result = await khoSimAdapter.crawl(context)
+
+    expect(result).toMatchObject({
+      completeness: 'returned_set_complete',
+      rawNumbers: mobiles
+    })
+    expect(result.declaredTotal).toBe(3)
+    expect(result.warning).toContain('bỏ qua 1 số máy bàn 11 chữ số')
+    expect(fetchText).toHaveBeenCalledTimes(1)
+  })
+
+  it.each(['09123456789', '0123456789'])(
+    'rejects an unsupported listed number instead of silently filtering %s',
+    async (unsupported) => {
+      const fetchText = vi.fn(async () => html(1, [unsupported]))
+      const context = mockContext('khosim', 'https://khosim.com/sim-gia-re', fetchText)
+
+      await expect(khoSimAdapter.crawl(context)).rejects.toMatchObject({ code: 'SITE_CHANGED' })
+      expect(fetchText).toHaveBeenCalledTimes(1)
+    }
+  )
+
+  it('rejects a row whose href and visible number disagree', async () => {
+    const fetchText = vi.fn(async () => `
+      <span id="lb-total-sim">1</span>
+      <table class="tbl-list-sim"><tbody><tr><td class="sim">
+        <a href="https://khosim.com/0912345678">0987654321</a>
+      </td></tr></tbody></table>
+    `)
+    const context = mockContext('khosim', 'https://khosim.com/sim-gia-re', fetchText)
+
+    await expect(khoSimAdapter.crawl(context)).rejects.toMatchObject({ code: 'SITE_CHANGED' })
+    expect(fetchText).toHaveBeenCalledTimes(1)
+  })
+
   it('stops before pagination when the declared total exceeds 5,000', async () => {
     const fetchText = vi.fn(async () => html(5_001, [simNumber(1)]))
     const context = mockContext('khosim', 'https://khosim.com/sim-gia-re', fetchText)

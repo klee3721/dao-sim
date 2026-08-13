@@ -17,8 +17,13 @@ class RetryableAttemptError extends Error {
 
 interface ParsedPage {
   declaredTotal: number
-  numbers: string[]
+  listedNumbers: string[]
+  mobileNumbers: string[]
 }
+
+const MOBILE_NUMBER = /^0[35789]\d{8}$/
+const LANDLINE_NUMBER = /^02\d{9}$/
+const LISTED_NUMBER = /^0\d{9,10}$/
 
 function parseCount(value: string): number | null {
   const digits = value.replace(/[^\d]/g, '')
@@ -31,7 +36,7 @@ function numberFromHref(rawHref: string | undefined): string | null {
   if (!rawHref) return null
   try {
     const pathname = decodeURIComponent(new URL(rawHref, 'https://khosim.com/').pathname)
-    return pathname.match(/\/(0\d{9})\/?$/)?.[1] ?? null
+    return pathname.match(/\/(0\d{9,10})\/?$/)?.[1] ?? null
   } catch {
     return null
   }
@@ -48,27 +53,46 @@ function parsePage(html: string): ParsedPage {
     )
   }
 
-  const numbers: string[] = []
-  $('table.tbl-list-sim')
-    .first()
-    .find('td.sim')
-    .each((_index, cell) => {
-      const anchor = $(cell).find('a').first()
-      const hrefNumber = numberFromHref(anchor.attr('href'))
-      const textDigits = anchor.text().replace(/\D/g, '')
-      const textNumber = /^0\d{9}$/.test(textDigits) ? textDigits : null
-      const number = hrefNumber ?? textNumber
-      if (number) numbers.push(number)
-    })
+  const listedNumbers: string[] = []
+  const mobileNumbers: string[] = []
+  const cells = $('table.tbl-list-sim').first().find('td.sim')
+  cells.each((_index, cell) => {
+    const anchor = $(cell).find('a').first()
+    const hrefNumber = numberFromHref(anchor.attr('href'))
+    const textDigits = anchor.text().replace(/\D/g, '')
+    const textNumber = LISTED_NUMBER.test(textDigits) ? textDigits : null
+    if (hrefNumber && textNumber && hrefNumber !== textNumber) {
+      throw new AppError(
+        'SITE_CHANGED',
+        'Số trong liên kết và nội dung KhoSim không khớp. Ứng dụng đã dừng để tránh lưu sai.'
+      )
+    }
+    const number = hrefNumber ?? textNumber
+    if (!number) return
+    if (!MOBILE_NUMBER.test(number) && !LANDLINE_NUMBER.test(number)) {
+      throw new AppError(
+        'SITE_CHANGED',
+        `KhoSim trả số có định dạng không được hỗ trợ: ${number}.`
+      )
+    }
+    listedNumbers.push(number)
+    if (MOBILE_NUMBER.test(number)) mobileNumbers.push(number)
+  })
 
-  if (declaredTotal > 0 && numbers.length === 0) {
+  if (declaredTotal > 0 && listedNumbers.length === 0) {
     throw new AppError(
       'SITE_CHANGED',
       'Không đọc được danh sách SIM trên KhoSim. Website có thể đã thay đổi.'
     )
   }
+  if (listedNumbers.length !== cells.length) {
+    throw new AppError(
+      'SITE_CHANGED',
+      'Có dòng số trên KhoSim không đọc được. Website có thể đã thay đổi.'
+    )
+  }
 
-  return { declaredTotal, numbers }
+  return { declaredTotal, listedNumbers, mobileNumbers }
 }
 
 function canonicalSourceUrl(sourceUrl: string): URL {
@@ -124,12 +148,14 @@ async function crawlAttempt(
   }
 
   const pageCount = Math.max(1, Math.ceil(declaredTotal / PAGE_SIZE))
-  const rawNumbers = [...firstPage.numbers]
-  const uniqueNumbers = new Set(firstPage.numbers)
+  const rawListedNumbers = [...firstPage.listedNumbers]
+  const uniqueListedNumbers = new Set(firstPage.listedNumbers)
+  const rawNumbers = [...firstPage.mobileNumbers]
+  const uniqueNumbers = new Set(firstPage.mobileNumbers)
   const fingerprints = new Set<string>()
 
-  if (firstPage.numbers.length > 0) {
-    fingerprints.add(firstPage.numbers.join('|'))
+  if (firstPage.listedNumbers.length > 0) {
+    fingerprints.add(firstPage.listedNumbers.join('|'))
   }
 
   context.report({
@@ -154,14 +180,16 @@ async function crawlAttempt(
       )
     }
 
-    const fingerprint = parsed.numbers.join('|')
+    const fingerprint = parsed.listedNumbers.join('|')
     if (fingerprint && fingerprints.has(fingerprint)) {
       throw new RetryableAttemptError(`KhoSim trả lại nội dung trang đã tải ở trang ${page}.`)
     }
     if (fingerprint) fingerprints.add(fingerprint)
 
-    rawNumbers.push(...parsed.numbers)
-    for (const number of parsed.numbers) uniqueNumbers.add(number)
+    rawListedNumbers.push(...parsed.listedNumbers)
+    for (const number of parsed.listedNumbers) uniqueListedNumbers.add(number)
+    rawNumbers.push(...parsed.mobileNumbers)
+    for (const number of parsed.mobileNumbers) uniqueNumbers.add(number)
 
     context.report({
       phase: 'fetching',
@@ -190,7 +218,7 @@ async function crawlAttempt(
     const finalFirstPage = parsePage(await context.fetchText(pageUrl(baseUrl, 1)))
     if (
       finalFirstPage.declaredTotal !== declaredTotal ||
-      finalFirstPage.numbers.join('|') !== firstPage.numbers.join('|')
+      finalFirstPage.listedNumbers.join('|') !== firstPage.listedNumbers.join('|')
     ) {
       throw new RetryableAttemptError(
         'Trang đầu hoặc tổng số SIM đã thay đổi trong lúc crawl.'
@@ -198,11 +226,27 @@ async function crawlAttempt(
     }
   }
 
-  if (rawNumbers.length !== declaredTotal || uniqueNumbers.size !== declaredTotal) {
+  if (
+    rawListedNumbers.length !== declaredTotal ||
+    uniqueListedNumbers.size !== declaredTotal
+  ) {
     throw new RetryableAttemptError(
-      `Website công bố ${declaredTotal} SIM nhưng chỉ đọc được ${rawNumbers.length} dòng, ` +
-        `${uniqueNumbers.size} SIM duy nhất.`
+      `Website công bố ${declaredTotal} số nhưng chỉ đọc được ${rawListedNumbers.length} dòng, ` +
+        `${uniqueListedNumbers.size} số duy nhất.`
     )
+  }
+
+  const skippedLandlines = rawListedNumbers.length - rawNumbers.length
+  if (skippedLandlines > 0) {
+    return {
+      rawNumbers,
+      completeness: 'returned_set_complete',
+      warning:
+        `Đã đọc đủ ${declaredTotal.toLocaleString('vi-VN')} dòng trên KhoSim và bỏ qua ` +
+        `${skippedLandlines.toLocaleString('vi-VN')} số máy bàn 11 chữ số; ` +
+        'file chỉ lưu SIM di động.',
+      declaredTotal
+    }
   }
 
   return {

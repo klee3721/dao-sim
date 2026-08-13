@@ -1,6 +1,6 @@
 {
   "name": "dao-sim",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "Ứng dụng macOS và Windows duyệt web, crawl SIM và luận số tự động hoặc hàng loạt.",
   "main": "out/main/index.js",
   "author": "Đào Sim",
