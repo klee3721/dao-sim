@@ -102,18 +102,26 @@ function assertAsarMetadata(archivePath) {
     throw new Error(`app.asar không chứa out/main/index.js: ${archivePath}`)
   }
   if (!archiveFiles.includes('LICENSE')) {
-    throw new Error(`app.asar không chứa giấy phép MIT: ${archivePath}`)
+    throw new Error(`app.asar không chứa giấy phép GPL v3: ${archivePath}`)
   }
   if (!archiveFiles.includes('THIRD_PARTY_NOTICES.md')) {
     throw new Error(`app.asar không chứa thông báo giấy phép bên thứ ba: ${archivePath}`)
   }
 
   const packagedMetadata = JSON.parse(asar.extractFile(archivePath, 'package.json').toString('utf8'))
+  const packagedLicense = asar.extractFile(archivePath, 'LICENSE')
+  const sourceLicense = readFileSync(join(projectRoot, 'LICENSE'))
+  if (!packagedLicense.equals(sourceLicense)) {
+    throw new Error(`Giấy phép trong app.asar không khớp LICENSE của mã nguồn: ${archivePath}`)
+  }
   if (packagedMetadata.name !== packageJson.name) {
     throw new Error(`Sai package name trong app.asar: ${packagedMetadata.name}`)
   }
   if (packagedMetadata.version !== version) {
     throw new Error(`Sai phiên bản trong app.asar: ${packagedMetadata.version}`)
+  }
+  if (packagedMetadata.license !== packageJson.license) {
+    throw new Error(`Sai SPDX license trong app.asar: ${packagedMetadata.license}`)
   }
 
   const mainBundle = asar.extractFile(archivePath, join('out', 'main', 'index.js')).toString('utf8')

@@ -23,8 +23,8 @@ npm run build
 - Không commit file build, danh sách SIM, cookie, token, khóa ký, `.env` hoặc dữ liệu người dùng.
 - Không thêm cơ chế vượt CAPTCHA, giới hạn truy cập hoặc gọi API giữ/mua SIM.
 - Giữ crawler ở chế độ chỉ đọc, do người dùng chủ động chạy và có giới hạn tốc độ hợp lý.
-- Chỉ đóng góp mã nguồn, nội dung và hình ảnh mà bạn có quyền cấp phép theo MIT.
+- Chỉ đóng góp mã nguồn, nội dung và hình ảnh mà bạn có quyền cấp phép theo GPL-3.0-only.
 
 Pull request từ fork công khai chỉ chạy typecheck, test và audit. Bộ cài chính thức được đóng gói từ nhánh `main` hoặc bằng workflow thủ công của dự án.
 
-Khi gửi đóng góp, bạn đồng ý cấp phép phần đóng góp của mình theo [MIT License](LICENSE) của dự án.
+Khi gửi đóng góp, bạn đồng ý cấp phép phần đóng góp của mình theo [GNU General Public License v3.0 only](LICENSE) của dự án.

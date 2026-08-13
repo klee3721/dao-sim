@@ -1,7 +1,7 @@
 # Đào Sim cho macOS và Windows
 
 [![Windows](https://github.com/klee3721/dao-sim/actions/workflows/windows.yml/badge.svg)](https://github.com/klee3721/dao-sim/actions/workflows/windows.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![License: GPL v3](https://img.shields.io/badge/License-GPL_v3-blue.svg)](LICENSE)
 
 Ứng dụng desktop dùng trình duyệt nhúng để tìm và crawl SIM từ bốn website:
 
@@ -142,7 +142,7 @@ Vui lòng báo cáo lỗ hổng theo [chính sách bảo mật](SECURITY.md), kh
 
 ## Open source và đóng góp
 
-Mã nguồn Đào Sim được phát hành theo [MIT License](LICENSE). Hướng dẫn thiết lập, kiểm tra và gửi pull request nằm trong [CONTRIBUTING.md](CONTRIBUTING.md). Giấy phép của các dependency được liệt kê tại [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+Copyright © 2026 Trung Kien Vu. Mã nguồn Đào Sim được phát hành theo [GNU General Public License v3.0 only](LICENSE). Khi phân phối chương trình, kể cả phiên bản đã sửa đổi, bạn phải cung cấp mã nguồn tương ứng và giữ cùng quyền tự do theo các điều khoản của GPL v3. Hướng dẫn thiết lập, kiểm tra và gửi pull request nằm trong [CONTRIBUTING.md](CONTRIBUTING.md). Giấy phép của các dependency được liệt kê tại [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 Đào Sim là dự án độc lập, không liên kết, đại diện hoặc được bảo trợ bởi KhoSim, Sim Thăng Long, Viettel hay VNPT. Tên và nhãn hiệu của các bên thuộc chủ sở hữu tương ứng. Người dùng và người đóng góp có trách nhiệm tuân thủ điều khoản của website, pháp luật áp dụng và giới hạn truy cập hợp lý.
 

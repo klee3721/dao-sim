@@ -1,6 +1,6 @@
 # Third-party notices
 
-Đào Sim sử dụng các thành phần mã nguồn mở của bên thứ ba. Mỗi thành phần tiếp tục được cấp phép theo giấy phép riêng của nó; giấy phép MIT của Đào Sim không thay thế các giấy phép đó.
+Đào Sim sử dụng các thành phần mã nguồn mở của bên thứ ba. Mỗi thành phần tiếp tục được cấp phép theo giấy phép riêng của nó; giấy phép GPL-3.0-only của Đào Sim không thay thế các giấy phép đó.
 
 Các dependency chạy thực tế gồm:
 

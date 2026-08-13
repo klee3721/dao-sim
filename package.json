@@ -1,10 +1,10 @@
 {
   "name": "dao-sim",
-  "version": "0.7.1",
+  "version": "0.7.2",
   "description": "Ứng dụng macOS và Windows duyệt web, crawl SIM và luận số tự động hoặc hàng loạt.",
   "main": "out/main/index.js",
   "author": "Trung Kien Vu",
-  "license": "MIT",
+  "license": "GPL-3.0-only",
   "private": true,
   "repository": {
     "type": "git",

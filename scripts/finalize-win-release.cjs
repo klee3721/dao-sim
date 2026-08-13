@@ -102,6 +102,7 @@ function removeStaleWindowsOutputs() {
       if (
         packagedMetadata.name !== packageJson.name ||
         packagedMetadata.version !== version ||
+        packagedMetadata.license !== packageJson.license ||
         !mainBundle.includes(JSON.stringify(appId))
       ) {
         throw new Error(`Thư mục debug Windows không đúng bản ${productName} ${version}: ${entryPath}`)
